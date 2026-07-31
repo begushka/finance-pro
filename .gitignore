@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Dados locais do aplicativo
+financeiro.db
+financeiro.db-journal
+
+*.json
