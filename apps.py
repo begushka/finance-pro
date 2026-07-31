@@ -1,10 +1,16 @@
 import streamlit as st
-import json
 import os
 import sqlite3
 import pandas as pd
 from datetime import datetime
-import plotly.express as px # Adicionado para o gráfico de pizza
+import plotly.express as px
+from dotenv import load_dotenv
+
+# --- CARREGA VARIÁVEIS DE AMBIENTE (.env) ---
+load_dotenv()
+
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "senha123")
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão Financeira Pro", layout="wide", page_icon="💰")
@@ -37,21 +43,10 @@ def inicializar_banco():
                 FOREIGN KEY (usuario) REFERENCES usuarios(usuario)
             )
         """)
-        arquivo_legado = os.path.join(os.path.dirname(os.path.abspath(__file__)), "usuarios.json")
-        if os.path.exists(arquivo_legado):
-            try:
-                with open(arquivo_legado, "r", encoding="utf-8") as arquivo:
-                    usuarios_legados = json.load(arquivo)
-                for usuario, dados in usuarios_legados.items():
-                    banco.execute(
-                        "INSERT OR IGNORE INTO usuarios (usuario, senha, status) VALUES (?, ?, ?)",
-                        (usuario, dados["senha"], dados.get("status", "ativo"))
-                    )
-            except (OSError, json.JSONDecodeError, KeyError):
-                pass
+        # Cria o usuário admin baseado nas variáveis do .env
         banco.execute(
             "INSERT OR IGNORE INTO usuarios (usuario, senha, status) VALUES (?, ?, ?)",
-            ("begushka", "santozx", "ativo")
+            (ADMIN_USER, ADMIN_PASS, "ativo")
         )
 
 def carregar_usuarios():
@@ -90,7 +85,7 @@ def adicionar_dado(usuario, tipo, valor, descricao):
         )
 
 def excluir_usuario(nome_usuario):
-    if nome_usuario != 'begushka':
+    if nome_usuario != ADMIN_USER:
         with conexao() as banco:
             banco.execute("DELETE FROM movimentacoes WHERE usuario = ?", (nome_usuario,))
             banco.execute("DELETE FROM usuarios WHERE usuario = ?", (nome_usuario,))
@@ -105,7 +100,7 @@ if 'logado' not in st.session_state:
 
 # --- TELA DE LOGIN ---
 def tela_login():
-    st.markdown("<h1 style='text-align: center;'>🏪 Área de Acesso</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🏪 Área de Acesso</h1>", unsafe_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         aba_entrar, aba_registrar = st.tabs(["🔑 Entrar", "📝 Registrar"])
@@ -163,14 +158,14 @@ def tela_principal():
     st.sidebar.caption("Soluções inteligentes em Python")
 
     # --- PAINEL DO ADMINISTRADOR ---
-    if user_logado == "begushka":
+    if user_logado == ADMIN_USER:
         st.info("🛠 **Painel Administrativo Detectado**")
         with st.expander("Gerenciar Clientes"):
             aba_lista, aba_novo, aba_credenciais, aba_excluir = st.tabs(["Lista/Editar", "Cadastrar Novo", "👥 Usuários e Senhas", "🗑️ Excluir Usuário"])
             
             with aba_lista:
                 banco = carregar_usuarios()
-                clientes = [c for c in banco.keys() if c != "begushka"]
+                clientes = [c for c in banco.keys() if c != ADMIN_USER]
                 if clientes:
                     c_alvo = st.selectbox("Escolha o Cliente para Editar", clientes)
                     novo_st = st.radio("Status", ["ativo", "suspenso"], index=0 if banco[c_alvo]["status"]=="ativo" else 1)
@@ -204,16 +199,16 @@ def tela_principal():
                 st.warning("Cuidado! A exclusão é permanente.")
                 banco = carregar_usuarios()
                 for u_nome in list(banco.keys()):
-                    if u_nome != 'begushka':
+                    if u_nome != ADMIN_USER:
                         c1, c2 = st.columns([3, 1])
                         c1.write(f"👤 {u_nome}")
                         if c2.button("Apagar", key=f"del_{u_nome}"):
                             excluir_usuario(u_nome)
                             st.rerun()
 
-    st.title(f"📈 Dashboard Financeiro")
+    st.title("📈 Dashboard Financeiro")
     
-    # --- LOGICA FINANCEIRA ---
+    # --- LÓGICA FINANCEIRA ---
     dados = carregar_dados(user_logado)
     st.sidebar.divider()
     st.sidebar.subheader("Novo Registro")
@@ -222,14 +217,16 @@ def tela_principal():
     desc = st.sidebar.text_input("Descrição")
     
     if st.sidebar.button("Confirmar"):
-        if desc:
+        if desc and valor > 0:
             adicionar_dado(user_logado, tipo.lower(), valor, desc)
             st.rerun()
+        else:
+            st.sidebar.error("Informe uma descrição e um valor maior que zero.")
 
     if dados:
         df = pd.DataFrame(dados)
-        ent = df[df['tipo'].str.contains('entrada', case=False, na=False)]['valor'].sum()
-        sai = df[df['tipo'].str.contains('saida|saída', case=False, na=False)]['valor'].sum()
+        ent = df[df['tipo'] == 'entrada']['valor'].sum()
+        sai = df[df['tipo'] == 'saída']['valor'].sum()
         
         c1, c2, c3 = st.columns(3)
         c1.metric("Entradas", f"R$ {ent:.2f}")
@@ -247,11 +244,13 @@ def tela_principal():
             
         with col_g2:
             st.subheader("🍕 Distribuição %")
-            # Gráfico de pizza usando Plotly para mostrar porcentagens
-            fig = px.pie(values=[ent, sai], names=['Entradas', 'Saídas'], 
-                        color_discrete_sequence=['#2ecc71', '#e74c3c'],
-                        hole=0.3)
-            st.plotly_chart(fig, use_container_width=True)
+            if (ent + sai) > 0:
+                fig = px.pie(values=[ent, sai], names=['Entradas', 'Saídas'], 
+                            color_discrete_sequence=['#2ecc71', '#e74c3c'],
+                            hole=0.3)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Insira valores para visualizar a distribuição.")
 
         st.divider()
         st.subheader("🕒 Últimas Movimentações")
