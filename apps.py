@@ -100,7 +100,7 @@ if 'logado' not in st.session_state:
 
 # --- TELA DE LOGIN ---
 def tela_login():
-    st.markdown("<h1 style='text-align: center;'>🏪 Área de Acesso</h1>", unsafe_html=True)
+    st.markdown("<h1 style='text-align: center;'>🏪 Área de Acesso</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         aba_entrar, aba_registrar = st.tabs(["🔑 Entrar", "📝 Registrar"])
