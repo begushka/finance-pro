@@ -221,4 +221,4 @@ __marimo__/
 financeiro.db
 financeiro.db-journal
 
-*.json
+*.db
